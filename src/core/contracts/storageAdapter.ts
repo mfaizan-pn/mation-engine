@@ -14,4 +14,5 @@ export interface RuleStorageAdapter {
   listRules():
     | Promise<ReadonlyArray<ConditionDefinition>>
     | ReadonlyArray<ConditionDefinition>;
+  deleteRule?(id: string): Promise<boolean> | boolean;
 }

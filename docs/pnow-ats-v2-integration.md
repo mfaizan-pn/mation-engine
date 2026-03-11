@@ -37,6 +37,7 @@ pnpm --filter mation-engines test
 
 - API registration: `docs/api-registration-guide.md`
 - Cross-domain examples: `docs/usecases.md`
+- HTTP/Swagger testing: `docs/http-api.md`
 
 ## 2) Recommended Runtime Topology
 

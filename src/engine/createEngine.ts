@@ -75,3 +75,20 @@ export const createEngine = <TContext extends Record<string, unknown>>(
     registerFunction: (definition) => service.registerFunction(definition),
   };
 };
+
+export const createEngineAsync = async <
+  TContext extends Record<string, unknown>,
+>(
+  config: EngineConfig = {},
+): Promise<RuleEngine<TContext>> => {
+  const storageConditions = config.storage
+    ? await config.storage.listRules()
+    : [];
+
+  const mergedConditions = [...storageConditions, ...(config.conditions ?? [])];
+
+  return createEngine<TContext>({
+    ...config,
+    conditions: mergedConditions,
+  });
+};

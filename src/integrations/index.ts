@@ -5,4 +5,5 @@
  * `import { InMemoryRuleStorageAdapter } from "mation-engines";`
  */
 export * from "./storage/inMemoryRuleStorageAdapter";
+export * from "./storage/minioRuleStorageAdapter";
 export * from "./pnow";

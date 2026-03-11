@@ -4,6 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "api:dev": "ts-node src/api/server.ts",
     "mvp:demo": "ts-node src/mvp.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -19,6 +20,10 @@
     "vitest": "^3.2.4"
   },
   "dependencies": {
+    "@fastify/swagger": "^9.5.2",
+    "@fastify/swagger-ui": "^5.2.3",
+    "fastify": "^5.6.1",
+    "minio": "^8.0.6",
     "zod": "^3.24.3"
   }
 }

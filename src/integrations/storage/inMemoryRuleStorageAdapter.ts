@@ -21,4 +21,8 @@ export class InMemoryRuleStorageAdapter implements RuleStorageAdapter {
   public listRules(): ReadonlyArray<ConditionDefinition> {
     return Array.from(this.store.values());
   }
+
+  public deleteRule(id: string): boolean {
+    return this.store.delete(id);
+  }
 }

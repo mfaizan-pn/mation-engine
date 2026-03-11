@@ -156,7 +156,11 @@ export class RuleEngineService<TContext extends Record<string, unknown>> {
   }
 
   public removeRule(id: string): boolean {
-    return this.repositories.conditions.delete(id);
+    const removed = this.repositories.conditions.delete(id);
+    if (removed) {
+      this.storage?.deleteRule?.(id);
+    }
+    return removed;
   }
 
   public getRule(id: string): ConditionDefinition | undefined {
