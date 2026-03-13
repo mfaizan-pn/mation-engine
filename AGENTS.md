@@ -1,174 +1,837 @@
-# Agent Guide for mation-engine
+# AGENTS.md
 
-Purpose: This guide equips contributors and automation agents with the full working context of this repository so you can extend the universal conditional logic + automation engine safely, consistently, and quickly.
+## Purpose
 
-Scope: Applies to the entire repository.
+This agent is responsible for designing, maintaining, and operating the **Universal Conditional Logic Engine**.
 
-Status (2026-03-06): Core type scaffolding and operator catalogs are present. Execution engine, translators, and parsers are described in `README.md` and partially prototyped in types; they are not fully implemented in `src/` yet.
+The engine is a layered system for authoring, compiling, storing, loading, translating, executing, and observing conditional logic across multiple platforms and runtimes.
 
+The engine must allow a condition to be:
 
-## 1) High-Level Overview
-- Vision: “LLVM(Low-Level Virtual Machine) for Conditional Logic.” Define once, execute anywhere, translate to many targets (SQL, MongoDB, UI React predicates, workflows).
-- Pillars:
-  - Universal IR for conditions and tasks.
-  - Type-safe operator catalogs and pure evaluation functions.
-  - Bidirectional adapters: parsers (→ IR) and translators (IR → targets).
-  - Observability by design: tracing, timing, and metrics on condition/task execution.
+- defined once,
+- compiled once,
+- stored once,
+- referenced by ID,
+- materialized into the required execution/output form in any supported layer.
 
+This system should be treated as the **LLVM for conditional logic**:
+a universal semantic pipeline between many input formats and many output targets.
 
-## 2) Repository Structure
-- Root
-  - `README.md`: Full product vision, architecture, IR, translators, task engine design, examples, and roadmap.
-  - `package.json`: Tooling and minimal runtime deps (`typescript`, `ts-node`, `@types/node`, `zod`).
-  - `tsconfig.json`: CommonJS, ES2016 target. Adjust as build evolves.
-  - `.gitignore`: Node modules, tool versions.
-- `src/`
-  - `index.ts`: Domain inventory and taxonomy notes for triggers, rules, and actions; ideation entry.
-  - `example.ts`: Realistic automation payload for a lead-enrichment workflow (trigger → conditions → actions → optional delay → flow graph shell).
-  - `types/`
-    - `index.ts`: Barrel exporting domain subpackages.
-    - `actions/index.ts`: Placeholder `IAction` interface.
-    - `metrics/index.ts`: Placeholder `IMetric` interface.
-    - `triggers/index.ts`: Placeholder `ITrigger` interface.
-    - `rules/index.ts`: Core rule scaffold:
-      - Rule groups: `EVALUATION`, `VALIDATION`, `AUTHORIZATION` (+ `USER` reserved).
-      - Operand namespaces under `EVALUATION`: `STRING`, `NUMBER`, `DATE`, `ARRAY`, `OBJECT`, `JSON`, `COMMON`.
-      - Operator catalogs per operand with strongly typed keys (via `createOperands`).
-      - Pure operator implementations collected under `functions[operand][operator]`.
-    - `rules/components/operands.ts`: Reserved for operand componentization (currently a stub).
-    - `rules/operations/{unary,binary}.ts`: Reserved for IR node modeling of operations (stubs).
-- `utils/`
-  - `createOperands.ts`: Strongly typed string-literal map creator used for rule/operand/operator catalogs.
-- `interfaces/`
-  - `operandMap.d.ts`: `OperandMap<T extends string>` generic leveraged by `createOperands`.
+---
 
+# Core Understanding
 
-## 3) Core Concepts and IR
-- Rule Groups
-  - `EVALUATION`: Data value checks across types.
-  - `VALIDATION`: Signature/type constraints (planned; pair with `zod`).
-  - `AUTHORIZATION`: Capability constraints (e.g., `CAN`, `LIMITED`).
-- Operands/Operators (EVALUATION)
-  - `STRING`: `EQUALS`, `CONTAINS`, `STARTS_WITH`, `ENDS_WITH`, `LENGTH_*`.
-  - `NUMBER`: `EQUALS`, `GREATER_THAN`, `LESS_THAN`, `AROUND(threshold)`, `IS_NEGATIVE`, `IS_ZERO`, `IS_DECIMAL`, `IS_PRECISION`, `BETWEEN`, `IS_EVEN`, `IS_DIVISIBLE_BY`, `IS_MULTIPLE_OF`, `IS_FACTOR_OF`.
-  - `DATE`: `EQUALS`, `BEFORE`, `AFTER`, `BETWEEN` (Date objects).
-  - `ARRAY`: `CONTAINS`, `EQUALS`, `LENGTH_*`, `LENGTH_BETWEEN`, `SATISFIES(predicate)`.
-  - `OBJECT`: `EQUALS` (shallow structural), `CONTAINS` (key existence), `SATISFIES(k,v→bool)`.
-  - `JSON`: `EQUALS` (parse+structural eq), `SATISFIES(obj→bool)`. Guards invalid JSON by returning `false`.
-  - `COMMON`
-    - `LOGICAL`: `AND(...booleans)`, `OR(...booleans)` with short-circuit potential in engine.
-    - `ASSERTION`: `ASSERT(a)`, `ASSERT_NOT(a)`.
-    - `NULLISH`: `IS_EMPTY`, `IS_NAN`, `IS_NULL`, `IS_UNDEFINED`, `EXISTS`.
-- Purity: All operator functions are pure and side-effect-free to keep evaluation deterministic and testable.
+The engine is built around a **registry-driven semantic model**.
 
+At bootstrap time, every service has access to the same default registry of:
 
-## 4) Example Automation Data Model (`src/example.ts`)
-A complete seed payload for a lead-processing automation:
-- Trigger: Kafka event on topic `leads-topic` for `lead.record.created.success`.
-- Conditions: SIMPLE checks like `EXISTS`, `MATCHES_REGEX`, `EQUALS`, on paths such as `data.lead.email`, `apollo.company.id`.
-- Actions: Heterogeneous orchestration including `DATA_UPDATE`, `UPDATE_LEAD`, `HTTP_REQUEST` to external `Apollo`, `CUSTOM_FUNCTION` services (`DomainExtractor`, `LeadScorer`, `FollowUpScheduler`, `MetricsService`), `ASSIGN_TO_USER`, and `NOTIFICATION_SEND`.
-- Delay: Optional fixed delay before enrichment.
-- Flow Graph: Empty shell to be populated by a React Flow-based UI (nodes/edges versioned storage).
-Use this as a contract specimen for DB schemas, UI builders, and later translators.
+- rules
+- operands
+- operators
+- functions
+- validation contracts
+- execution semantics
 
+All valid conditions must be formed from this registry.
 
-## 5) Planned Execution Engines (per README)
-- ConditionExecutor
-  - Resolve subject → choose operand/operator → evaluate.
-  - Observability: trace span with `condition.id`, type, result, duration.
-  - Optimizations: short-circuit logicals, optional caching for expensive sub-expressions.
-- TaskExecutionEngine
-  - Build dependency DAG, topological sort, and execute in concurrent queues.
-  - Retry policies in task metadata; capture per-task result typing.
-  - Metrics hooks for throughput and failure classification.
-These are design targets; implement incrementally inside `src/` with unit tests.
+This means the engine is **closed-world by default**:
+only registered logic is valid unless explicitly extended.
 
+The engine is not an arbitrary eval system.
+It is a controlled, typed, serializable, portable conditional logic compiler/runtime.
 
-## 6) Parsers and Translators (per README)
-- Parsers (external format → IR): `UIBuilderParser`, `SQLParser`, `YAMLParser`, `JSONLogicParser`.
-- Translators (IR → target): `SQLTranslator`, `MongoTranslator`, `ReactTranslator`.
-- Mapping: Maintain explicit operator mapping tables per translator; avoid implicit guessing. Add golden tests to guarantee parity among backends for equivalent conditions.
+---
 
+# System Layers
 
-## 7) Build, Run, and Type-Check
-- Install deps: `npm i` (or `pnpm i`).
-- Type-check: `npx tsc --noEmit`.
-- Dev runs: `npx ts-node src/example.ts` (validates structure/types; no runtime engine yet).
-- Tests: None configured yet—see section 10 for recommendations.
+The engine consists of the following architectural layers.
 
+## 1. Input Layer
 
-## 8) Coding Standards
-- Language: TypeScript. Prefer strict typing and explicit parameter types.
-- Operator catalogs: Define keys via `createOperands` to preserve literal types.
-- Function style: Pure, deterministic, no I/O or ambient globals. Keep functions small and self-describing.
-- Error handling: Return booleans; validation layers (e.g., `zod`) should verify shapes before evaluation.
-- Naming: Match operator names exactly in code maps (e.g., `GREATER_THAN`).
-- Layout: Keep domain types under `src/types/*`. Utility helpers in `utils/*`. Avoid circular references.
+Responsible for receiving conditions from external systems.
 
+Examples:
+- frontend builders
+- JavaScript/TypeScript expressions
+- JSON configs
+- YAML definitions
+- SQL fragments
+- low-code tools
+- legacy APIs
+- future voice or NL interfaces
 
-## 9) Extensibility Playbooks
-- Add a new operand category
-  1. Define the operand key under the appropriate group using `createOperands`.
-  2. Declare operator keys for that operand.
-  3. Implement pure functions in the `functions[operand]` map 1:1 with keys.
-  4. Document runtime expectations (arg types, edge cases) and add tests.
-- Add a new operator to an existing operand
-  1. Append the operator key in the operand’s `createOperands([...])` list.
-  2. Implement function with precise param contracts.
-  3. Update translator mapping tables (SQL/Mongo/React) where applicable.
-  4. Add unit tests + translator golden tests.
-- Add a parser/translator
-  1. Create a dedicated module under `src/parsers` or `src/translators`.
-  2. Define clean interfaces (e.g., `ConditionParser`, `ConditionTranslator`).
-  3. Provide an explicit operator mapping table.
-  4. Add round-trip tests (format → IR → format) where feasible.
+The input layer is user-facing or system-facing and may be language-specific.
 
+## 2. Parser Layer
 
-## 10) Testing Strategy (Recommended)
-- Unit tests (operators)
-  - Table-driven tests for each operator with valid/invalid/edge inputs.
-  - Pay special attention to: numeric precision (`IS_PRECISION`), `BETWEEN` boundaries, JSON parse failures, date comparisons.
-- Integration tests
-  - Parser → IR → Translator golden tests to ensure consistent semantics across backends.
-  - Execution engine tests for DAG correctness and concurrency behavior.
-- Property-based tests
-  - For equivalence of logically identical conditions and round-trips.
-- Suggested tooling: `vitest` or `jest` + `ts-node` + `tsconfig.test.json`.
+Responsible for converting source input into structured parsed representations.
 
+This layer understands source syntax, source-language semantics, and diagnostics.
 
-## 11) Observability and Performance
-- Tracing: Expose hooks to record `condition.id`, inputs (sanitized), result, and duration. Keep operator functions pure; perform tracing at orchestration boundaries.
-- Metrics: Counters for operator invocations, histograms for duration, error rates for invalid inputs.
-- Optimizations: short-circuit evaluation, optional caching (JSON parse, expensive predicates), batch strategies for arrays/objects.
+Its job is not execution.
+Its job is syntax interpretation and semantic extraction.
 
+## 3. Universal DSL Layer
 
-## 12) Security and Safety
-- Input validation: Use `zod` at the boundaries (parsers, API) to coerce/validate types before evaluation.
-- Injection safety: Translators must parameterize values (never string-concatenate untrusted inputs into SQL, etc.).
-- Sandboxing: Custom functions and HTTP requests (referenced by actions) must be executed in controlled environments with timeouts and retry policies.
+Responsible for representing conditions in a language-agnostic semantic form.
 
+This is the canonical interchange layer between:
+- source parsing
+- validation
+- normalization
+- translation
+- execution planning
 
-## 13) Contribution Workflow
-- Branching: Feature branches; small PRs.
-- Commits: Conventional commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`).
-- Documentation: Update this guide and `README.md` when adding operators, operands, translators, or engine features.
-- Code review checklist
-  - Types accurate and exported where needed.
-  - Operator catalogs and implementations consistent and complete.
-  - No side effects in operators; tests cover typical and edge inputs.
-  - Translators use explicit mapping and safe parameterization.
+The DSL removes source-language syntax noise while preserving condition meaning.
 
+## 4. Canonical AST / IR Layer
 
-## 14) Current Gaps and Next Steps
-- Implement a minimal `ConditionExecutor` in `src/engine/conditions.ts` with pluggable tracing hooks.
-- Scaffold `src/translators/{sql,mongo,react}/index.ts` with explicit operator maps.
-- Introduce `src/parsers/{ui,yaml,jsonlogic,sql}/index.ts` stubs and `zod` schemas.
-- Add a `vitest` test harness and cover all operators in `src/types/rules/index.ts`.
-- Flesh out `rules/components/operands.ts` and `rules/operations/{unary,binary}.ts` to model IR nodes explicitly if needed by translators/visualizers.
+Responsible for representing the DSL in a canonical machine-oriented form.
 
+This is the persisted rule form and the main storage source of truth.
 
-## 15) Quick Pointers
-- Typed catalog helper: `utils/createOperands.ts`
-- Rule implementations: `src/types/rules/index.ts`
-- Example automation payload: `src/example.ts`
-- Shared map type: `interfaces/operandMap.d.ts`
+It must be:
+- typed
+- canonical
+- compact
+- deterministic
+- registry-backed
+- versioned
+
+## 5. Translator Layer
+
+Responsible for materializing the semantic rule into target-specific forms.
+
+Examples:
+- TypeScript evaluator form
+- Python evaluator form
+- Go evaluator form
+- SQL query
+- MongoDB filter
+- GraphQL filter
+- React-compatible expression
+- workflow engine condition object
+
+The translator layer must be target-aware but semantically consistent.
+
+## 6. Output Layer
+
+Responsible for returning the final target artifact or execution result.
+
+Outputs may include:
+- a boolean result
+- a query object
+- a SQL fragment with parameters
+- a target-language expression
+- a workflow rule
+- an execution plan
+- a debugging/explanation artifact
+
+## 7. Observability Layer
+
+Responsible for tracing, metrics, diagnostics, explainability, and operational visibility.
+
+It must provide insight into:
+- parse behavior
+- validation results
+- normalization
+- translation
+- execution
+- performance
+- failure reasons
+
+---
+
+# Primary Product Model
+
+The engine turns conditions into **portable compiled assets**.
+
+A condition is not just source text.
+It becomes a reusable rule asset with:
+
+- an ID
+- a canonical semantic representation
+- a machine-storable form
+- target-independent meaning
+- target-specific execution capability
+
+This means business logic is no longer duplicated manually across frontend, backend, and database layers.
+
+Instead:
+
+1. author rule once
+2. compile rule once
+3. store rule once
+4. execute by ID anywhere
+
+---
+
+# Source of Truth Hierarchy
+
+The engine has multiple representations. They serve different purposes.
+
+## Registry
+Defines what logic is legal.
+
+## Universal DSL
+Defines what the rule means in a language-agnostic way.
+
+## Canonical AST / IR
+Defines how the rule is stored and transported internally.
+
+## Target Materialization
+Defines how the rule is executed or emitted in a specific environment.
+
+## Original Source
+An optional authoring artifact useful for provenance/debugging, but not the primary runtime source of truth.
+
+---
+
+# Bootstrap Registry Model
+
+The agent must assume a default bootstrapped registry exists and is available to services.
+
+## Rules
+
+Default rule categories include:
+
+- `EVALUATION`
+- `VALIDATION`
+- `AUTHORIZATION`
+- `USER`
+
+## Operands
+
+Operands are grouped under rules.
+
+Examples:
+- `STRING`
+- `NUMBER`
+- `DATE`
+- `ARRAY`
+- `OBJECT`
+- `JSON`
+- `COMMON`
+- `SIGNATURE`
+- `TYPE`
+- `CAN`
+- `LIMITED`
+
+## Operators
+
+Operators are grouped under operands.
+
+Examples:
+- `EQUALS`
+- `CONTAINS`
+- `STARTS_WITH`
+- `ENDS_WITH`
+- `GREATER_THAN`
+- `LESS_THAN`
+- `BETWEEN`
+- `AROUND`
+- `IS_NULL`
+- `IS_UNDEFINED`
+- `EXISTS`
+- `ASSERT`
+- `ASSERT_NOT`
+- `AND`
+- `OR`
+
+## Functions
+
+Functions implement the runtime semantics of operators.
+
+Important rule:
+persisted rules must store **operator identity**, not raw function closures.
+
+Runtime resolves operator implementations through the registry.
+
+---
+
+# Key Architectural Principle
+
+A rule may only be created from registered semantics.
+
+If a source expression cannot be mapped to:
+- a valid rule category,
+- a valid operand,
+- a valid operator,
+- and a valid runtime/translation contract,
+
+then it must be rejected or flagged as unsupported.
+
+---
+
+# End-to-End Pipeline
+
+## Compile-Time Pipeline
+
+The compile-time pipeline is:
+
+Input Layer  
+→ Parser Layer  
+→ Universal DSL Layer  
+→ Canonical AST / IR Layer  
+→ Serialization  
+→ Compression  
+→ Storage
+
+### Compile-Time Responsibilities
+
+#### 1. Accept source condition
+Receive source input from any supported input layer.
+
+#### 2. Parse
+Convert source syntax into a structured source-specific parse representation.
+
+#### 3. Lower to DSL
+Convert parsed syntax into language-agnostic semantic DSL.
+
+#### 4. Validate against registry
+Ensure the condition is expressible using registered rules, operands, operators, and supported semantics.
+
+#### 5. Lower to canonical AST / IR
+Convert DSL into canonical machine-oriented representation.
+
+#### 6. Normalize
+Canonicalize the rule for deterministic storage and equivalence.
+
+#### 7. Serialize
+Serialize canonical AST / IR and metadata into binary.
+
+#### 8. Compress
+Compress the binary payload using zstd.
+
+#### 9. Store
+Persist the compressed artifact plus searchable metadata.
+
+---
+
+## Runtime Pipeline
+
+The runtime pipeline is:
+
+Rule ID  
+→ Load Stored Artifact  
+→ Decompress  
+→ Deserialize AST / IR  
+→ Rebuild Semantic Form  
+→ Translator Layer or Execution Layer  
+→ Output Layer  
+→ Observability Layer
+
+### Runtime Responsibilities
+
+#### 1. Load by rule ID
+The engine must support rule retrieval by ID as a first-class operation.
+
+#### 2. Verify
+Check compatibility and integrity:
+- storage version
+- registry version
+- AST schema version
+- checksum
+- compression compatibility
+
+#### 3. Decompress
+Decompress stored binary.
+
+#### 4. Deserialize
+Reconstruct canonical AST / IR.
+
+#### 5. Rebuild semantic form
+Reconstruct DSL or equivalent semantic representation.
+
+#### 6. Materialize target form
+Translate or interpret based on current runtime target.
+
+#### 7. Execute or emit output
+Return:
+- boolean result
+- target filter/query
+- target expression
+- execution plan
+- explanation/debug artifact
+
+---
+
+# Runtime Objective
+
+The primary runtime goal is **not** exact reconstruction of the original source string.
+
+The real runtime goal is:
+
+**load a stored rule by ID and materialize it into the form required by the current target layer**
+
+Examples:
+- frontend execution form
+- backend TypeScript execution form
+- Python service execution form
+- Go service execution form
+- SQL database query
+- MongoDB filter
+- workflow engine condition
+- direct AST interpreter execution
+
+The same stored rule may be executed differently depending on the target environment.
+
+---
+
+# Input Layer Expectations
+
+The input layer may accept different source formats, but they must all map into the same semantic system.
+
+Examples:
+- JS/TS expressions
+- JSON rules
+- YAML rules
+- UI builder payloads
+- backend filter objects
+- SQL-like input forms
+- future domain-specific inputs
+
+The input layer is allowed to be heterogeneous.
+The semantic core must remain unified.
+
+---
+
+# Parser Layer Expectations
+
+The parser layer must:
+- understand source syntax
+- produce parse diagnostics
+- preserve semantic intent
+- identify unsupported constructs early
+- avoid leaking source-language-specific quirks into the DSL when not intended
+
+The parser layer must not define business semantics.
+It only extracts and structures them.
+
+---
+
+# Universal DSL Expectations
+
+The DSL is the semantic interchange contract.
+
+It must express:
+- rule category
+- operand family
+- operator
+- subject/reference path
+- comparison/reference values
+- logical composition
+- assertions
+- nullish checks
+- inversion
+- metadata
+
+The DSL should be easy to:
+- validate
+- normalize
+- translate
+- explain
+- version
+
+The DSL is not the final persisted form.
+It is the canonical semantic layer.
+
+---
+
+# Canonical AST / IR Expectations
+
+The AST / IR is the machine-oriented persisted form.
+
+It must be:
+- canonical
+- typed
+- deterministic
+- registry-backed
+- compact
+- binary-serializable
+- versioned
+
+It should not be a raw source AST.
+It should be a semantic IR.
+
+## AST should represent
+- logical nodes
+- comparison nodes
+- unary assertion/nullish nodes
+- field/path references
+- literal references
+- structured argument references
+- operator identity
+- optional metadata references
+
+## Persisted references
+Where possible, use:
+- stable numeric IDs for rule categories
+- stable numeric IDs for operands
+- stable numeric IDs for operators
+- symbol table references for subjects/paths
+- literal pool references for values
+
+Strings may be kept in metadata/debug snapshots, but not as the only machine contract.
+
+---
+
+# Translator Layer Expectations
+
+The translator layer is responsible for materializing the semantic rule into target-specific forms.
+
+Supported translators may include:
+- TypeScript translator
+- Python translator
+- Go translator
+- SQL translator
+- Mongo translator
+- GraphQL translator
+- React/UI translator
+- workflow translator
+
+The translator layer must preserve semantics as much as the target supports.
+
+When perfect fidelity is not possible, the translator must:
+- fail safely,
+- or report lossy translation explicitly.
+
+---
+
+# Output Layer Expectations
+
+The output layer is the final produced artifact for a consumer.
+
+Outputs may include:
+- evaluated boolean result
+- SQL WHERE clause + parameters
+- Mongo filter object
+- GraphQL filter input
+- backend-native evaluator object
+- frontend predicate abstraction
+- workflow definition
+- debug/explain plan
+
+The output layer is target-specific and must be driven by the translator/execution context.
+
+---
+
+# Observability Layer Expectations
+
+Observability is a first-class layer, not an afterthought.
+
+The engine must provide observability across:
+- parsing
+- validation
+- normalization
+- translation
+- serialization/deserialization
+- execution
+
+## Must capture
+- rule ID
+- canonical hash
+- compile success/failure
+- validation failure reason
+- normalization changes
+- storage size
+- compression ratio
+- load time
+- translation time
+- execution time
+- node-level evaluation results if enabled
+- backend translation failures
+
+## Must support
+- tracing
+- structured logs
+- metrics
+- explainability
+- debugging of failed subconditions
+
+---
+
+# Best Storage Strategy
+
+## Recommended primary storage format
+
+The stored representation should be:
+
+**binary serialized canonical AST / IR + metadata + zstd compression**
+
+## Do not use as primary storage
+- raw JSON
+- plain text DSL
+- hex encoding
+
+## Use these only for diagnostics/tooling
+- JSON snapshots
+- YAML snapshots
+- DSL text
+- hex dumps
+
+---
+
+# Metadata Requirements
+
+Every stored rule must include metadata.
+
+## Required metadata
+- `rule_id`
+- `rule_name` if available
+- `registry_version`
+- `dsl_version`
+- `ast_version`
+- `storage_version`
+- `source_language`
+- `source_format`
+- `created_at`
+- `updated_at`
+- `canonical_hash`
+- `compression_codec`
+- `checksum`
+- `root_node_index`
+
+## Semantic metadata
+- referenced fields
+- used operands
+- used operators
+- expected input types
+- null semantics
+- coercion policy
+- verbosity
+- inversion flag
+- metrics enabled flag
+- system-defined flag
+
+## Optional provenance metadata
+- original source condition text
+- parser diagnostics
+- normalization diagnostics
+- migration history
+- toolchain version
+
+---
+
+# Rule ID Execution Model
+
+The engine must support first-class rule execution by ID.
+
+The expected system usage is:
+
+1. a condition is authored once in some input layer
+2. it is parsed and compiled through the semantic pipeline
+3. it is stored as a portable compiled rule asset
+4. later, another layer references only the rule ID
+5. the engine loads the rule and materializes it into the required target form
+
+This is one of the most important product behaviors.
+
+The stored rule is a shared semantic asset across layers.
+
+---
+
+# Canonicalization Rules
+
+The AST / IR must be canonicalized where safe.
+
+Examples:
+- flatten nested `AND` / `OR`
+- sort commutative operands where valid
+- normalize field references
+- normalize literal representations
+- fold constants where safe
+- remove redundant wrappers/grouping
+
+Canonicalization must preserve semantics, not source formatting.
+
+---
+
+# Type Safety Rules
+
+The engine must be strongly typed.
+
+Validation must ensure:
+- operator belongs to operand family
+- operand belongs to rule category
+- operator arity is correct
+- subject/reference types are valid
+- structured values are valid
+- null semantics are explicit
+- coercion is explicit
+- unsupported combinations are rejected
+
+Do not treat JavaScript coercion as universal semantics unless explicitly configured.
+
+---
+
+# Operator Semantics Rules
+
+The engine must distinguish between:
+
+## Unary operators
+Examples:
+- `IS_NULL`
+- `IS_UNDEFINED`
+- `IS_ZERO`
+- `IS_NEGATIVE`
+- `ASSERT`
+- `ASSERT_NOT`
+
+## Binary operators
+Examples:
+- `EQUALS`
+- `CONTAINS`
+- `GREATER_THAN`
+- `LESS_THAN`
+- `STARTS_WITH`
+
+## Variadic operators
+Examples:
+- `AND`
+- `OR`
+
+## Structured-value operators
+Examples:
+- `BETWEEN`
+- `AROUND`
+- `LENGTH_BETWEEN`
+
+AST shape and validation rules must reflect these differences explicitly.
+
+---
+
+# Important Constraint on Predicate-Based Operators
+
+Operators like:
+- `ARRAY.SATISFIES`
+- `OBJECT.SATISFIES`
+- `JSON.SATISFIES`
+
+must not persist opaque in-memory closures.
+
+These operators are only acceptable in persisted rules if they are represented as:
+1. nested registry-backed conditions, or
+2. named registered predicates/functions referenced by stable ID
+
+The engine must reject non-serializable function closures in persisted rule artifacts.
+
+---
+
+# Registry Rules
+
+The bootstrap registry is versioned and must be treated as a core dependency.
+
+For each operator, the registry should define:
+- parent rule category
+- parent operand
+- stable identity
+- arity
+- parameter types
+- return type
+- purity
+- determinism
+- execution availability
+- translation support
+
+Persisted rules must store stable identities, not raw implementation code.
+
+---
+
+# Reversibility Policy
+
+The default runtime goal is semantic execution or translation, not exact source reconstruction.
+
+The standard flow is:
+
+stored binary  
+→ canonical AST / IR  
+→ semantic DSL  
+→ target-specific execution/output form
+
+Exact reconstruction of the original authored source is optional and primarily useful for:
+- provenance
+- auditing
+- editing workflows
+- debugging
+
+If exact source recovery is required, original source text must be stored separately as metadata.
+
+---
+
+# Security Requirements
+
+The engine must defend against:
+- malformed input
+- invalid operators/operands
+- unsupported source constructs
+- excessive nesting
+- oversized ASTs
+- cyclic structures
+- injected unsafe translator output
+- non-serializable predicates
+- expensive or unsafe execution paths
+
+Translators for query systems must always use safe escaping/parameterization.
+
+---
+
+# What the Agent Must Recommend by Default
+
+When asked how rules should be stored, the answer is:
+
+Store them as:
+- canonical registry-backed AST / IR
+- binary serialized
+- zstd compressed
+- versioned
+- metadata-rich
+- indexed by rule ID and canonical hash
+
+When asked how runtime should work, the answer is:
+
+Load by rule ID → decompress → deserialize AST / IR → rebuild semantic form → materialize target-specific execution/output form
+
+When asked whether original source text is the runtime source of truth, the answer is no.
+
+When asked whether JSON or hex should be the primary storage format, the answer is no.
+
+---
+
+# What the Agent Must Avoid
+
+Do not recommend:
+- eval-based execution
+- raw JSON as primary storage
+- hex as primary storage
+- persisting raw JS closures
+- treating source syntax as the canonical stored form
+- unversioned registries
+- untyped evaluation
+- target-specific logic as the semantic source of truth
+
+---
+
+# Golden Rule
+
+The registry defines what is legal.  
+The DSL defines what it means.  
+The canonical AST / IR defines how it is stored.  
+The translator/output layers define how it is materialized.  
+The observability layer defines how it is understood in production.
+
+---
+
+# Operational Summary
+
+## Compile Time
+Input layer → parser layer → universal DSL → canonical AST / IR → validate → normalize → binary serialize → zstd compress → store with metadata
+
+## Runtime
+Rule ID → load → verify → decompress → deserialize AST / IR → rebuild semantic form → translate or interpret for target layer → output result/artifact → observe
+
+## Best Storage
+Binary canonical AST / IR with metadata and zstd compression
+
+## Core Product Value
+Conditions become portable rule assets identified by ID and executable across layers without manual duplication
