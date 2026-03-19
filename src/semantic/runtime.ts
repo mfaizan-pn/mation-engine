@@ -43,6 +43,10 @@ const resolveValue = (
 
 export class SemanticRuntime {
   private readonly artifactCache = new Map<string, CompiledRuleArtifact>();
+  private readonly decodedIrCache = new Map<
+    string,
+    ReturnType<typeof decodeCompiledIr>
+  >();
 
   public constructor(
     private readonly registry: SemanticRegistry,
@@ -57,7 +61,9 @@ export class SemanticRuntime {
     }
   }
 
-  public async persistRegistryExtensions(state: RegistryExtensionState): Promise<void> {
+  public async persistRegistryExtensions(
+    state: RegistryExtensionState,
+  ): Promise<void> {
     await this.storage.saveRegistryExtensions?.(state);
   }
 
@@ -67,7 +73,7 @@ export class SemanticRuntime {
   ): Promise<void> {
     const packed = packCompiledArtifact(artifact);
     await this.storage.saveRuleArtifact(ruleId, packed);
-    this.artifactCache.set(ruleId, artifact);
+    this.cacheArtifact(ruleId, artifact);
   }
 
   public async listRuleIds(): Promise<ReadonlyArray<string>> {
@@ -84,7 +90,8 @@ export class SemanticRuntime {
     context: Record<string, unknown>,
   ): Promise<RuntimeExecutionResult | null> {
     const artifact = await this.loadArtifact(ruleId);
-    if (!artifact) {
+    const ir = await this.loadDecodedIr(ruleId);
+    if (!artifact || !ir) {
       return null;
     }
 
@@ -93,8 +100,6 @@ export class SemanticRuntime {
         `Registry version mismatch for ${ruleId}. Expected ${this.registry.version}, got ${artifact.metadata.registry_version}.`,
       );
     }
-
-    const ir = decodeCompiledIr(artifact, this.codec);
     const trace: RuntimeExecutionResult["trace"] = [];
 
     const evaluateNode = (nodeIndex: number): boolean => {
@@ -121,7 +126,9 @@ export class SemanticRuntime {
 
       const fn = this.registry.getFunctionByOperatorId(node.operatorId);
       if (!fn) {
-        throw new Error(`Missing function implementation for ${node.operatorId}`);
+        throw new Error(
+          `Missing function implementation for ${node.operatorId}`,
+        );
       }
 
       const subject = resolveValue(
@@ -133,7 +140,12 @@ export class SemanticRuntime {
       const reference =
         node.referenceRef === undefined
           ? undefined
-          : resolveValue(node.referenceRef, context, ir.symbolTable, ir.literalPool);
+          : resolveValue(
+              node.referenceRef,
+              context,
+              ir.symbolTable,
+              ir.literalPool,
+            );
 
       const outcome =
         reference === undefined
@@ -158,13 +170,36 @@ export class SemanticRuntime {
 
   public async deleteRule(ruleId: string): Promise<boolean> {
     this.artifactCache.delete(ruleId);
+    this.decodedIrCache.delete(ruleId);
     if (!this.storage.deleteRuleArtifact) {
       return false;
     }
     return await this.storage.deleteRuleArtifact(ruleId);
   }
 
-  private async loadArtifact(ruleId: string): Promise<CompiledRuleArtifact | null> {
+  public async preloadAllArtifacts(): Promise<{
+    ruleCount: number;
+    loadedCount: number;
+  }> {
+    const ruleIds = await this.storage.listRuleIds();
+    let loadedCount = 0;
+
+    for (const ruleId of ruleIds) {
+      const packed = await this.storage.loadRuleArtifact(ruleId);
+      if (!packed) {
+        continue;
+      }
+      const artifact = unpackCompiledArtifact(packed);
+      this.cacheArtifact(ruleId, artifact);
+      loadedCount += 1;
+    }
+
+    return { ruleCount: ruleIds.length, loadedCount };
+  }
+
+  private async loadArtifact(
+    ruleId: string,
+  ): Promise<CompiledRuleArtifact | null> {
     const cached = this.artifactCache.get(ruleId);
     if (cached) {
       return cached;
@@ -176,7 +211,29 @@ export class SemanticRuntime {
     }
 
     const artifact = unpackCompiledArtifact(packed);
-    this.artifactCache.set(ruleId, artifact);
+    this.cacheArtifact(ruleId, artifact);
     return artifact;
+  }
+
+  private async loadDecodedIr(
+    ruleId: string,
+  ): Promise<ReturnType<typeof decodeCompiledIr> | null> {
+    const cached = this.decodedIrCache.get(ruleId);
+    if (cached) {
+      return cached;
+    }
+    const artifact = await this.loadArtifact(ruleId);
+    if (!artifact) {
+      return null;
+    }
+    const decoded = decodeCompiledIr(artifact, this.codec);
+    this.decodedIrCache.set(ruleId, decoded);
+    return decoded;
+  }
+
+  private cacheArtifact(ruleId: string, artifact: CompiledRuleArtifact): void {
+    this.artifactCache.set(ruleId, artifact);
+    const decoded = decodeCompiledIr(artifact, this.codec);
+    this.decodedIrCache.set(ruleId, decoded);
   }
 }

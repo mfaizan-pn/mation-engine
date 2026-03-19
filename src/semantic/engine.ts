@@ -81,6 +81,7 @@ export const createSemanticEngine = async (config: {
   const registry = createDefaultSemanticRegistry();
   const runtime = new SemanticRuntime(registry, config.storage, codec);
   await runtime.hydrateRegistryExtensions();
+  await runtime.preloadAllArtifacts();
   const compiler = new SemanticRuleCompiler(registry, codec);
 
   const persistRegistry = async (): Promise<void> => {
