@@ -348,7 +348,6 @@ graph TB
         UI[UI Builders]
         JSON[JSON Configs]
         YAML[YAML Rules]
-        Voice[Voice Commands]
         Legacy[Legacy APIs]
     end
     
@@ -356,7 +355,6 @@ graph TB
         P1[UI Parser]
         P2[JSON Parser]
         P3[YAML Parser]
-        P4[Voice Parser]
         P5[Legacy Parser]
     end
     
@@ -393,13 +391,11 @@ graph TB
     UI --> P1
     JSON --> P2
     YAML --> P3
-    Voice --> P4
     Legacy --> P5
     
     P1 --> UDS
     P2 --> UDS
     P3 --> UDS
-    P4 --> UDS
     P5 --> UDS
     
     UDS --> TypeSafe

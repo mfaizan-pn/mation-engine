@@ -1,3 +1,10 @@
+/**
+ * What: Legacy + current rule catalogs, operators, and schema definitions.
+ * Why: Central place for rule typing during MVP evolution.
+ * How to use:
+ * `import { ZRuleSchema } from "../types/rules";`
+ * Note: This file is intentionally broad and will be further modularized.
+ */
 import { z } from "zod";
 
 export interface IRule {}
@@ -353,3 +360,6 @@ export const ZRuleSchema = z.object({
       "should this condition be evaluated inversely? meaning, are you looking for a failing condition? if yes, set this to true",
     ),
 });
+
+export * from "./components/operands";
+export * from "./operations";
